@@ -61,8 +61,8 @@ jobs:
           def git(*args): return subprocess.check_output(['git', *args], text=True).strip()
           aar=pathlib.Path('dist/hiddify-core.aar')
           with zipfile.ZipFile(aar) as z:
-            assert 'jni/arm64-v8a/libgojni.so' in z.namelist()
-            assert 'jni/x86_64/libgojni.so' in z.namelist()
+            assert 'jni/arm64-v8a/libhiddify-core.so' in z.namelist()
+            assert 'jni/x86_64/libhiddify-core.so' in z.namelist()
           source={'coreCommit':git('rev-parse','HEAD'),
             'singBoxCommit':git('-C','hiddify-sing-box','rev-parse','HEAD'),
             'singQuicCommit':'8e1edab793fe9e5d7804f961ad09f48969b4ce6d',
