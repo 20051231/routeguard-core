@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 45
     env:
       TAGS: with_gvisor,with_quic,with_utls,with_clash_api,with_grpc,with_conntrack,tfogo_checklinkname0
+      GOFLAGS: -mod=readonly
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,7 +33,7 @@ jobs:
           java-version: '17'
       - name: Verify dependency checksums and warm invariants
         run: |
-          go mod download
+          go mod download github.com/sagernet/sing-quic
           go mod verify
           (cd hiddify-sing-box && go test -race ./protocol/group ./protocol/hysteria2 ./experimental/clashapi/trafficontrol)
           go test -ldflags='-checklinkname=0' -tags "$TAGS" ./v2/hcore ./platform/mobile -run '^TestRouteGuard'
