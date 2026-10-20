@@ -1,0 +1,81 @@
+name: RouteGuard warm core Android
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/routeguard-warm-standby]
+permissions:
+  contents: read
+concurrency:
+  group: routeguard-core-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  core:
+    if: github.repository == '20051231/routeguard-core'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TAGS: with_gvisor,with_quic,with_utls,with_clash_api,with_grpc,with_conntrack,tfogo_checklinkname0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            hiddify-sing-box/go.sum
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify dependency checksums and warm invariants
+        run: |
+          go mod download
+          go mod verify
+          (cd hiddify-sing-box && go test -race ./protocol/group ./protocol/hysteria2 ./experimental/clashapi/trafficontrol)
+          go test -ldflags='-checklinkname=0' -tags "$TAGS" ./v2/hcore ./platform/mobile -run '^TestRouteGuard'
+      - name: Install pinned Android tooling
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.12
+          go install github.com/sagernet/gomobile/cmd/gobind@v0.1.12
+      - name: Build RouteGuard ARM64 and x86_64 core
+        env:
+          CGO_LDFLAGS: -O2 -g -s -w -Wl,-z,max-page-size=16384
+        run: |
+          mkdir -p dist
+          gomobile bind -androidapi=23 -javapkg=com.hiddify.core -libname=hiddify-core \
+            -tags="$TAGS" -trimpath -ldflags='-w -s -checklinkname=0 -buildid=' \
+            -target=android/arm64,android/amd64 -o dist/hiddify-core.aar \
+            github.com/sagernet/sing-box/experimental/libbox ./platform/mobile
+      - name: Record immutable source and artifact identity
+        run: |
+          sha256sum dist/hiddify-core.aar > dist/SHA256SUMS
+          python3 - <<'PY'
+          import json, os, subprocess, hashlib, pathlib, zipfile
+          def git(*args): return subprocess.check_output(['git', *args], text=True).strip()
+          aar=pathlib.Path('dist/hiddify-core.aar')
+          with zipfile.ZipFile(aar) as z:
+            assert 'jni/arm64-v8a/libgojni.so' in z.namelist()
+            assert 'jni/x86_64/libgojni.so' in z.namelist()
+          source={'coreCommit':git('rev-parse','HEAD'),
+            'singBoxCommit':git('-C','hiddify-sing-box','rev-parse','HEAD'),
+            'singQuicCommit':'8e1edab793fe9e5d7804f961ad09f48969b4ce6d',
+            'sourceDirty':bool(git('status','--porcelain')),
+            'sha256':hashlib.sha256(aar.read_bytes()).hexdigest(),
+            'workflowRun':os.environ['GITHUB_RUN_ID'],'tags':os.environ['TAGS'],
+            'androidApi':23,'abis':['arm64-v8a','x86_64']}
+          assert not source['sourceDirty']
+          pathlib.Path('dist/provenance.json').write_text(json.dumps(source,indent=2)+'\n')
+          print(json.dumps(source,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: routeguard-core-${{ github.sha }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30

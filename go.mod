@@ -348,3 +348,5 @@ replace github.com/kianmhz/GooseRelayVPN => github.com/hiddify/GooseRelayVPN v0.
 replace github.com/Diniboy1123/connect-ip-go => github.com/shtorm-7/connect-ip-go v1.0.0-extended-1.1.1
 
 replace github.com/amnezia-vpn/amneziawg-go => github.com/hiddifydeveloper/amneziawg-go v0.0.0-20261001141816-70b344f2f78b
+
+replace github.com/sagernet/sing-quic => github.com/20051231/routeguard-sing-quic v0.7.1-0.20261020163911-8e1edab793fe
